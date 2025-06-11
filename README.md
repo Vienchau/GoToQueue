@@ -1,6 +1,5 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/three-ball/go-to-queue)](https://goreportcard.com/report/github.com/three-ball/go-to-queue)
 [![GoDoc](https://godoc.org/github.com/three-ball/go-to-queue?status.svg)](https://godoc.org/github.com/three-ball/go-to-queue)
-[![CI](https://github.com/three-ball/go-to-queue/workflows/CI/badge.svg)](https://github.com/three-ball/go-to-queue/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 # Go To Queue
@@ -293,3 +292,29 @@ workerQueue, err := pool.GetQueueLength(0) // Queue length for worker 0
 fmt.Printf("Pool: %d workers, %d total items, worker 0 has %d items\n", 
     poolSize, totalQueued, workerQueue)
 ```
+
+## Testing
+
+Run the test suite:
+
+```bash
+go test ./...
+```
+
+Run tests with race detection:
+
+```bash
+go test -race ./...
+```
+
+## Examples
+
+See the [example](./example) directory for a complete working example showcasing all features.
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
