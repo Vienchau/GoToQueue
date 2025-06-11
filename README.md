@@ -10,12 +10,6 @@
 - **Expiration**: Items can expire before processing
 - **Metadata**: Attach custom data to queue items
 
-## Installation
-
-```bash
-go get github.com/your-username/go-to-queue
-```
-
 ## Quick Start
 
 ```go
@@ -215,33 +209,3 @@ workerQueue, err := pool.GetQueueLength(0) // Queue length for worker 0
 fmt.Printf("Pool: %d workers, %d total items, worker 0 has %d items\n", 
     poolSize, totalQueued, workerQueue)
 ```
-
-## Key Guarantees
-
-- **Same key → Same worker**: Items with identical keys are always processed by the same worker
-- **FIFO per worker**: Each worker processes items in the order they were received
-- **Graceful shutdown**: Workers complete current tasks and drain queues before stopping
-- **Context awareness**: Respects cancellation and timeouts throughout the pipeline
-- **Thread-safe**: Safe for concurrent use across multiple goroutines
-
-## Error Handling
-
-```go
-err := pool.Enqueue("key", myFunc)
-if err != nil {
-    switch err {
-    case gotoqueue.ErrQueueNotRunning:
-        fmt.Println("Pool is stopped")
-    case gotoqueue.ErrQueueItemExpired:
-        fmt.Println("Item already expired")
-    case gotoqueue.ErrQueueItemCancelled:
-        fmt.Println("Context was cancelled")
-    case context.DeadlineExceeded:
-        fmt.Println("Enqueue timeout")
-    }
-}
-```
-
-## License
-
-MIT License - see LICENSE file for details.
