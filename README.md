@@ -1,14 +1,17 @@
 # Go To Queue
 
-> Just some code implement Key-based Work Queue using Copilot
+> Just some code implement Key-based/Round-Robin Work Queue using Copilot
 
 ## Features
 
-- **Key-based routing**: Items with same key go to same worker (sequential processing)
-- **Concurrent workers**: Multiple workers process different keys in parallel  
+- **Multiple distribution strategies**:
+  - **Key-based routing**: Items with same key go to same worker (sequential processing per key)
+  - **Round-robin**: Items are distributed evenly across workers (load balancing)
+- **Concurrent workers**: Multiple workers process tasks in parallel  
 - **Context support**: Timeout and cancellation handling
 - **Expiration**: Items can expire before processing
 - **Metadata**: Attach custom data to queue items
+- **Thread-safe**: Safe for concurrent use across multiple goroutines
 
 ## Quick Start
 
@@ -24,8 +27,8 @@ import (
 )
 
 func main() {
-    // Create pool with 3 workers, buffer size 100
-    pool := gotoqueue.NewPool(3, 100)
+    // Create pool with 3 workers, buffer size 100, using key-based strategy
+    pool := gotoqueue.NewPool(3, 100, gotoqueue.KeyBased)
     pool.Start()
     defer pool.Stop()
 
@@ -48,15 +51,61 @@ func main() {
 }
 ```
 
+### Distribution Strategies
+
+#### Key-Based Strategy
+Items with the same key are always processed by the same worker, ensuring sequential processing per key:
+
+```go
+// Key-based: same keys go to same worker
+pool := gotoqueue.NewPool(3, 100, gotoqueue.KeyBased)
+pool.Enqueue("user:123", task1) // → Worker 0
+pool.Enqueue("user:123", task2) // → Worker 0 (same worker)
+pool.Enqueue("user:456", task3) // → Worker 1 (different worker)
+```
+
+#### Round-Robin Strategy
+Items are distributed evenly across all workers regardless of key:
+
+```go
+// Round-robin: even distribution across workers
+pool := gotoqueue.NewPool(3, 100, gotoqueue.RoundRobin)
+pool.Enqueue("any-key", task1) // → Worker 0
+pool.Enqueue("any-key", task2) // → Worker 1
+pool.Enqueue("any-key", task3) // → Worker 2
+pool.Enqueue("any-key", task4) // → Worker 0 (wraps around)
+```
+
 ## Architecture Overview
 
 ### Worker Distribution
+
+#### Key-Based Strategy
 ```
 ┌─────────────┐    Enqueue     ┌──────────────┐
 │   Client    │ ──────────────▶│     Pool     │
 └─────────────┘                └──────┬───────┘
                                       │
                                Hash(key) % workers
+                                      │
+                        ┌─────────────┼─────────────┐
+                        ▼             ▼             ▼
+                 ┌──────────┐  ┌──────────┐  ┌──────────┐
+                 │ Worker 0 │  │ Worker 1 │  │ Worker 2 │
+                 │ Queue    │  │ Queue    │  │ Queue    │
+                 └─────┬────┘  └─────┬────┘  └─────┬────┘
+                       │             │             │
+                    FIFO            FIFO          FIFO
+                   Processing     Processing    Processing
+```
+
+#### Round-Robin Strategy
+```
+┌─────────────┐    Enqueue     ┌──────────────┐
+│   Client    │ ──────────────▶│     Pool     │
+└─────────────┘                └──────┬───────┘
+                                      │
+                            counter++ % workers
                                       │
                         ┌─────────────┼─────────────┐
                         ▼             ▼             ▼
@@ -109,15 +158,39 @@ func main() {
 ## Usage Examples
 
 ### Basic Usage
+
+#### Key-Based Strategy
 ```go
-// Create and start pool
-pool := gotoqueue.NewPool(4, 50) // 4 workers, 50 buffer per worker
+// Create and start pool with key-based routing
+pool := gotoqueue.NewPool(4, 50, gotoqueue.KeyBased) // 4 workers, 50 buffer per worker
 pool.Start()
 defer pool.Stop()
 
-// Simple task
+// Tasks with same key go to same worker
 pool.Enqueue("user:123", func(ctx context.Context) {
-    fmt.Println("Process user 123")
+    fmt.Println("Process user 123 - task 1")
+})
+pool.Enqueue("user:123", func(ctx context.Context) {
+    fmt.Println("Process user 123 - task 2") // Same worker as task 1
+})
+```
+
+#### Round-Robin Strategy
+```go
+// Create and start pool with round-robin distribution
+pool := gotoqueue.NewPool(4, 50, gotoqueue.RoundRobin) // 4 workers, 50 buffer per worker
+pool.Start()
+defer pool.Stop()
+
+// Tasks are distributed evenly across workers
+pool.Enqueue("task-1", func(ctx context.Context) {
+    fmt.Println("Task 1") // → Worker 0
+})
+pool.Enqueue("task-2", func(ctx context.Context) {
+    fmt.Println("Task 2") // → Worker 1
+})
+pool.Enqueue("task-3", func(ctx context.Context) {
+    fmt.Println("Task 3") // → Worker 2
 })
 ```
 
