@@ -23,7 +23,7 @@ import (
     "fmt"
     "time"
     
-    "github.com/your-username/go-to-queue"
+    "github.com/three-ball/go-to-queue"
 )
 
 func main() {

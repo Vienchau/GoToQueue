@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	gotoqueue "github.com/your-username/go-to-queue"
+	gotoqueue "github.com/three-ball/go-to-queue"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-module github.com/your-username/go-to-queue
+module github.com/three-ball/go-to-queue
 
 go 1.20
 
