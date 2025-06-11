@@ -1,6 +1,11 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/three-ball/go-to-queue)](https://goreportcard.com/report/github.com/three-ball/go-to-queue)
+[![GoDoc](https://godoc.org/github.com/three-ball/go-to-queue?status.svg)](https://godoc.org/github.com/three-ball/go-to-queue)
+[![CI](https://github.com/three-ball/go-to-queue/workflows/CI/badge.svg)](https://github.com/three-ball/go-to-queue/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # Go To Queue
 
-> Just some code implement Key-based/Round-Robin Work Queue using Copilot
+> A high-performance, key-based worker queue implementation with FIFO ordering and concurrent processing capabilities.
 
 ## Features
 
@@ -12,6 +17,12 @@
 - **Expiration**: Items can expire before processing
 - **Metadata**: Attach custom data to queue items
 - **Thread-safe**: Safe for concurrent use across multiple goroutines
+
+## Installation
+
+```bash
+go get github.com/three-ball/go-to-queue
+```
 
 ## Quick Start
 
