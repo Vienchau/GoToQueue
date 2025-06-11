@@ -9,7 +9,7 @@ import (
 )
 
 func TestEnqueueWithContext(t *testing.T) {
-	mq := NewPool(2, 10)
+	mq := NewPool(2, 10, KeyBased)
 	mq.Start()
 	defer mq.Stop()
 
@@ -58,7 +58,7 @@ func TestEnqueueWithContext(t *testing.T) {
 
 	t.Run("context cancellation during enqueue", func(t *testing.T) {
 		// Create a pool with buffer size 1 (minimum allowed) and block the worker
-		smallPool := NewPool(1, 1)
+		smallPool := NewPool(1, 1, KeyBased)
 		smallPool.Start()
 		defer smallPool.Stop()
 
@@ -108,7 +108,7 @@ func TestEnqueueWithContext(t *testing.T) {
 }
 
 func TestEnqueueWithTimeout(t *testing.T) {
-	mq := NewPool(2, 10)
+	mq := NewPool(2, 10, KeyBased)
 	mq.Start()
 	defer mq.Stop()
 
@@ -146,7 +146,7 @@ func TestEnqueueWithTimeout(t *testing.T) {
 
 	t.Run("short timeout causes cancellation", func(t *testing.T) {
 		// Create a pool with buffer size 1 (minimum allowed) and block the worker
-		smallPool := NewPool(1, 1)
+		smallPool := NewPool(1, 1, KeyBased)
 		smallPool.Start()
 		defer smallPool.Stop()
 
@@ -192,12 +192,12 @@ func TestEnqueueWithTimeout(t *testing.T) {
 }
 
 func TestEnqueueWithExpiration(t *testing.T) {
-	mq := NewPool(2, 10)
+	mq := NewPool(2, 10, KeyBased)
 	mq.Start()
 	defer mq.Stop()
 	t.Run("item expires before execution", func(t *testing.T) {
 		// Create a pool that will have delayed processing
-		smallPool := NewPool(1, 10)
+		smallPool := NewPool(1, 10, KeyBased)
 		smallPool.Start()
 		defer smallPool.Stop()
 
@@ -274,7 +274,7 @@ func TestEnqueueWithExpiration(t *testing.T) {
 
 	t.Run("item with short expiration duration", func(t *testing.T) {
 		// Fill up queue to delay processing
-		smallPool := NewPool(1, 1)
+		smallPool := NewPool(1, 1, KeyBased)
 		smallPool.Start()
 		defer smallPool.Stop()
 
@@ -300,7 +300,7 @@ func TestEnqueueWithExpiration(t *testing.T) {
 }
 
 func TestEnqueueWithMetadata(t *testing.T) {
-	mq := NewPool(2, 10)
+	mq := NewPool(2, 10, KeyBased)
 	mq.Start()
 	defer mq.Stop()
 
@@ -387,7 +387,7 @@ func TestEnqueueWithMetadata(t *testing.T) {
 }
 
 func TestEnqueueCombinedOptions(t *testing.T) {
-	mq := NewPool(2, 10)
+	mq := NewPool(2, 10, KeyBased)
 	mq.Start()
 	defer mq.Stop()
 
@@ -547,7 +547,7 @@ func TestQueueItemMethods(t *testing.T) {
 
 func TestEnqueueErrorCases(t *testing.T) {
 	t.Run("enqueue to stopped pool", func(t *testing.T) {
-		mq := NewPool(2, 10)
+		mq := NewPool(2, 10, KeyBased)
 		// Don't start the pool
 
 		err := mq.Enqueue("test-key", func(ctx context.Context) {})
@@ -557,7 +557,7 @@ func TestEnqueueErrorCases(t *testing.T) {
 	})
 
 	t.Run("enqueue with all options to stopped pool", func(t *testing.T) {
-		mq := NewPool(2, 10)
+		mq := NewPool(2, 10, KeyBased)
 		// Don't start the pool
 
 		ctx := context.Background()
@@ -647,7 +647,7 @@ func TestQueueOptionsEdgeCases(t *testing.T) {
 }
 
 func TestConcurrentEnqueueWithOptions(t *testing.T) {
-	mq := NewPool(5, 20)
+	mq := NewPool(5, 20, KeyBased)
 	mq.Start()
 	defer mq.Stop()
 	t.Run("concurrent enqueue with different options", func(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 
 func TestWorkerStart(t *testing.T) {
 	t.Run("worker processes normal item successfully", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		pool.Start()
 		defer pool.Stop()
 
@@ -44,7 +44,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker skips expired items", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		// Create an expired item
@@ -73,7 +73,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker skips cancelled items", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		// Create a cancelled context
@@ -104,7 +104,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker handles nil function gracefully", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		nilFnItem := QueueItem{
@@ -131,7 +131,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker executes function without context", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		var executed bool
@@ -178,7 +178,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker handles context cancellation during execution", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -232,7 +232,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker drains queue during shutdown", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		var processedCount int
@@ -271,7 +271,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker skips expired items during shutdown drainage", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		var processedCount int
@@ -318,7 +318,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker skips cancelled items during shutdown drainage", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		var processedCount int
@@ -366,7 +366,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker handles nil function during shutdown drainage", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		var processedCount int
@@ -412,7 +412,7 @@ func TestWorkerStart(t *testing.T) {
 	})
 
 	t.Run("worker completes when queue is empty during shutdown", func(t *testing.T) {
-		pool := NewPool(1, 5)
+		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 
 		// Start worker

@@ -6,7 +6,7 @@ import (
 )
 
 func TestHashDeterminismAndDistribution(t *testing.T) {
-	mq := NewPool(4, 100)
+	mq := NewPool(4, 100, KeyBased)
 
 	// Determinism: same key always hashes to same worker
 	keys := []string{"alpha", "beta", "gamma", "delta", "epsilon", "alpha", "beta"}
@@ -55,7 +55,7 @@ func TestHashDeterminismAndDistribution(t *testing.T) {
 
 func TestHashWithZeroOrNegativeWorkers(t *testing.T) {
 	// Should never panic, but let's check behavior
-	mq := NewPool(0, 0)
+	mq := NewPool(0, 0, KeyBased)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("hash panicked with zero workers: %v", r)

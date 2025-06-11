@@ -34,30 +34,52 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spaolacci/murmur3"
 )
 
+type Strategy int
+
+const (
+	KeyBased   Strategy = iota // Key-based routing: items with same key go to same worker
+	RoundRobin                 // Round-robin: items are distributed evenly across workers
+)
+
 // Pool represents a pool of workers that can process items from the queue.
 type Pool struct {
-	workers   []*Worker
-	size      int
-	wg        sync.WaitGroup
-	mutex     sync.Mutex
-	isRunning bool
+	strategy        Strategy       // Strategy for distributing items to workers
+	roundRobinIndex int64          // Atomic index for round-robin strategy
+	workers         []*Worker      // Slice of workers in the pool
+	size            int            // Number of workers in the pool
+	wg              sync.WaitGroup // WaitGroup to wait for all workers to finish processing
+	mutex           sync.Mutex     // Mutex to protect access to the pool state
+	isRunning       bool           // Indicates if the pool is currently running
 }
 
 // to calculates the index of the worker based on the key.
 func (p *Pool) to(k string) int {
-	hash := murmur3.Sum32([]byte(k))
-	return int(hash) % p.size
+	switch p.strategy {
+	case RoundRobin:
+		// Use atomic operations for thread-safe round-robin
+		index := atomic.AddInt64(&p.roundRobinIndex, 1)
+		return int(index-1) % p.size
+	default:
+		hash := murmur3.Sum32([]byte(k))
+		return int(hash) % p.size
+	}
 }
 
 // NewPool creates a new worker pool with the specified size and buffer size.
 // The pool size determines how many workers will be created, and the buffer size determines how many items can be buffered in each worker's queue.
 // default of poolSize is 1 and bufferSize is 100 if they are not provided or are less than or equal to zero.
-func NewPool(poolSize int, bufferSize int) *Pool {
+func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
+	if s != KeyBased && s != RoundRobin {
+		log.Printf("Invalid strategy %d, defaulting to KeyBased", s)
+		s = KeyBased // Default to KeyBased if invalid strategy is provided
+	}
+
 	if poolSize <= 0 {
 		poolSize = 1 // Ensure at least one worker
 	}
@@ -70,6 +92,7 @@ func NewPool(poolSize int, bufferSize int) *Pool {
 		size:      poolSize,
 		workers:   make([]*Worker, poolSize),
 		isRunning: false,
+		strategy:  s,
 	}
 
 	for i := 0; i < poolSize; i++ {
@@ -244,4 +267,12 @@ func (p *Pool) IsRunning() bool {
 	defer p.mutex.Unlock()
 
 	return p.isRunning
+}
+
+// GetStrategy returns the current strategy used by the pool.
+func (p *Pool) GetStrategy() Strategy {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.strategy
 }

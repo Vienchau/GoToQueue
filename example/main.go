@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Create pool with 3 workers, buffer size 100
-	pool := gotoqueue.NewPool(3, 100)
+	pool := gotoqueue.NewPool(3, 100, gotoqueue.KeyBased)
 	pool.Start()
 	defer pool.Stop()
 

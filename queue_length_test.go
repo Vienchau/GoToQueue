@@ -10,7 +10,7 @@ import (
 
 func TestGetQueueLength(t *testing.T) {
 	t.Run("valid worker IDs", func(t *testing.T) {
-		mq := NewPool(3, 5)
+		mq := NewPool(3, 5, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -27,7 +27,7 @@ func TestGetQueueLength(t *testing.T) {
 	})
 
 	t.Run("invalid worker IDs", func(t *testing.T) {
-		mq := NewPool(3, 5)
+		mq := NewPool(3, 5, KeyBased)
 
 		// Test negative worker ID
 		_, err := mq.GetQueueLength(-1)
@@ -49,7 +49,7 @@ func TestGetQueueLength(t *testing.T) {
 	})
 
 	t.Run("queue length with items", func(t *testing.T) {
-		mq := NewPool(2, 10)
+		mq := NewPool(2, 10, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -99,7 +99,7 @@ func TestGetQueueLength(t *testing.T) {
 
 	t.Run("queue length boundary cases", func(t *testing.T) {
 		// Test with single worker pool
-		mq := NewPool(1, 1)
+		mq := NewPool(1, 1, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -119,7 +119,7 @@ func TestGetQueueLength(t *testing.T) {
 	})
 
 	t.Run("concurrent access to queue length", func(t *testing.T) {
-		mq := NewPool(3, 5)
+		mq := NewPool(3, 5, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -154,7 +154,7 @@ func TestGetQueueLength(t *testing.T) {
 
 func TestGetTotalQueueLength(t *testing.T) {
 	t.Run("empty queues", func(t *testing.T) {
-		mq := NewPool(3, 5)
+		mq := NewPool(3, 5, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -165,7 +165,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 	})
 
 	t.Run("single worker pool", func(t *testing.T) {
-		mq := NewPool(1, 5)
+		mq := NewPool(1, 5, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -176,7 +176,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 	})
 
 	t.Run("queues with items", func(t *testing.T) {
-		mq := NewPool(3, 10)
+		mq := NewPool(3, 10, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -217,7 +217,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 	})
 
 	t.Run("total equals sum of individual queues", func(t *testing.T) {
-		mq := NewPool(4, 5)
+		mq := NewPool(4, 5, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -263,7 +263,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 	})
 
 	t.Run("concurrent access to total queue length", func(t *testing.T) {
-		mq := NewPool(3, 5)
+		mq := NewPool(3, 5, KeyBased)
 		mq.Start()
 		defer mq.Stop()
 
@@ -299,7 +299,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 	})
 
 	t.Run("stopped pool queue length", func(t *testing.T) {
-		mq := NewPool(2, 5)
+		mq := NewPool(2, 5, KeyBased)
 		// Don't start the pool
 
 		// Should still be able to get queue lengths (they should be 0)
@@ -318,7 +318,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 		}
 	})
 	t.Run("queue length after pool stop", func(t *testing.T) {
-		mq := NewPool(2, 5)
+		mq := NewPool(2, 5, KeyBased)
 
 		// Start pool
 		mq.Start()
