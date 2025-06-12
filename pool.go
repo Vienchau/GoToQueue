@@ -159,7 +159,7 @@ func (p *Pool) Stop() {
 
 // Enqueue adds a new item to the queue with optional configuration.
 // This is the main method that uses the options pattern.
-func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOption) error {
+func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOption) (int, error) {
 	// Apply all options
 	options := applyEnqueueOptions(opts...)
 
@@ -169,19 +169,19 @@ func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOpti
 
 	// Check if the pool is running
 	if !isRunning {
-		return ErrQueueNotRunning
+		return 0, ErrQueueNotRunning
 	}
 
 	// Check if already expired
 	if !options.expireTime.IsZero() && time.Now().After(options.expireTime) {
-		return ErrQueueItemExpired
+		return 0, ErrQueueItemExpired
 	}
 
 	// Check if context is already cancelled
 	if options.ctx != nil {
 		select {
 		case <-options.ctx.Done():
-			return ErrQueueItemCancelled
+			return 0, ErrQueueItemCancelled
 		default:
 		}
 	}
@@ -207,21 +207,18 @@ func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOpti
 		expireTime:  options.expireTime,
 	}
 
-	log.Printf("Enqueuing item with key: %s to worker index: %d (has_context: %v, has_metadata: %v, expires: %v)",
-		key, workerIndex, options.ctx != nil, options.metadata != nil, !options.expireTime.IsZero())
-
 	// Try to enqueue with context awareness - wait until slot is available
 	if options.ctx != nil {
 		select {
 		case p.workers[workerIndex].queue <- item:
-			return nil
+			return workerIndex, nil
 		case <-options.ctx.Done():
-			return options.ctx.Err()
+			return 0, options.ctx.Err()
 		}
 	} else {
 		// Blocking send - wait until queue has space
 		p.workers[workerIndex].queue <- item
-		return nil
+		return workerIndex, nil
 	}
 }
 

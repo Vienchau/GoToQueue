@@ -59,7 +59,7 @@ func TestGetQueueLength(t *testing.T) {
 		// Add items that block execution to keep them in queue
 		for i := 0; i < 3; i++ {
 			wg.Add(1)
-			err := mq.Enqueue("key1", func(ctx context.Context) {
+			_, err := mq.Enqueue("key1", func(ctx context.Context) {
 				defer wg.Done()
 				time.Sleep(50 * time.Millisecond) // Reduced sleep time
 			})
@@ -187,7 +187,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 		for i := 0; i < itemCount; i++ {
 			wg.Add(1)
 			key := fmt.Sprintf("key%d", i%3) // Distribute across different workers
-			err := mq.Enqueue(key, func(ctx context.Context) {
+			_, err := mq.Enqueue(key, func(ctx context.Context) {
 				defer wg.Done()
 				time.Sleep(50 * time.Millisecond) // Reduced sleep time
 			})
@@ -227,7 +227,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 
 		for _, key := range keys {
 			wg.Add(1)
-			err := mq.Enqueue(key, func(ctx context.Context) {
+			_, err := mq.Enqueue(key, func(ctx context.Context) {
 				defer wg.Done()
 				time.Sleep(100 * time.Millisecond) // Keep this one longer for the queue length test
 			})
@@ -327,7 +327,7 @@ func TestGetTotalQueueLength(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(2)
 		for i := 0; i < 2; i++ {
-			err := mq.Enqueue(fmt.Sprintf("key%d", i), func(ctx context.Context) {
+			_, err := mq.Enqueue(fmt.Sprintf("key%d", i), func(ctx context.Context) {
 				defer wg.Done()
 				time.Sleep(25 * time.Millisecond) // Reduced sleep time
 			})

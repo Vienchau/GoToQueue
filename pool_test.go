@@ -57,7 +57,7 @@ func TestEnqueueAndExecution(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
 		index := i
-		err := mq.Enqueue(keys[index], func(ctx context.Context) {
+		_, err := mq.Enqueue(keys[index], func(ctx context.Context) {
 			defer wg.Done()
 			mutex.Lock()
 			executed[index] = true
@@ -109,7 +109,7 @@ func TestSameKeyFIFOOrder(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		value := i
-		err := mq.Enqueue(key, func(ctx context.Context) {
+		_, err := mq.Enqueue(key, func(ctx context.Context) {
 			defer wg.Done()
 			// Add some delay to ensure ordering matters
 			time.Sleep(10 * time.Millisecond)
@@ -166,7 +166,7 @@ func TestDifferentKeysDistribution(t *testing.T) {
 	for _, key := range keys {
 		wg.Add(1)
 		currentKey := key
-		err := mq.Enqueue(currentKey, func(ctx context.Context) {
+		_, err := mq.Enqueue(currentKey, func(ctx context.Context) {
 			defer wg.Done()
 			workerIndex := mq.to(currentKey)
 			mutex.Lock()
@@ -217,7 +217,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 		// Enqueue 9 tasks (3x number of workers for even distribution)
 		for i := 0; i < 9; i++ {
 			key := fmt.Sprintf("task-%d", i)
-			err := pool.Enqueue(key, func(ctx context.Context) {
+			_, err := pool.Enqueue(key, func(ctx context.Context) {
 				mu.Lock()
 				defer mu.Unlock()
 				totalProcessed++
@@ -259,7 +259,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 
 		// Use the same key for all tasks - round robin should still distribute
 		for i := 0; i < 6; i++ {
-			err := pool.Enqueue("same-key", func(ctx context.Context) {
+			_, err := pool.Enqueue("same-key", func(ctx context.Context) {
 				// Simulate work to see distribution pattern
 				time.Sleep(10 * time.Millisecond)
 			})
@@ -298,7 +298,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 
 		for i := 0; i < numTasks; i++ {
 			key := fmt.Sprintf("wrap-test-%d", i)
-			err := pool.Enqueue(key, func(ctx context.Context) {
+			_, err := pool.Enqueue(key, func(ctx context.Context) {
 				mu.Lock()
 				processedCount++
 				mu.Unlock()
@@ -354,7 +354,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 				defer wg.Done()
 				for i := 0; i < tasksPerGoroutine; i++ {
 					key := fmt.Sprintf("concurrent-%d-%d", goroutineId, i)
-					err := pool.Enqueue(key, func(ctx context.Context) {
+					_, err := pool.Enqueue(key, func(ctx context.Context) {
 						mu.Lock()
 						processedCount++
 						mu.Unlock()
@@ -462,7 +462,7 @@ func TestRoundRobinWithOptions(t *testing.T) {
 		// Enqueue tasks with expiration
 		for i := 0; i < 10; i++ {
 			key := fmt.Sprintf("expire-task-%d", i)
-			err := pool.Enqueue(key, func(ctx context.Context) {
+			_, err := pool.Enqueue(key, func(ctx context.Context) {
 				mu.Lock()
 				processedCount++
 				mu.Unlock()
@@ -497,7 +497,7 @@ func TestRoundRobinWithOptions(t *testing.T) {
 		// Enqueue tasks with context
 		for i := 0; i < 3; i++ {
 			key := fmt.Sprintf("context-task-%d", i)
-			err := pool.Enqueue(key, func(execCtx context.Context) {
+			_, err := pool.Enqueue(key, func(execCtx context.Context) {
 				mu.Lock()
 				processedCount++
 				mu.Unlock()

@@ -19,7 +19,7 @@ func TestWorkerStart(t *testing.T) {
 		var executedCtx context.Context
 
 		ctx := context.Background()
-		err := pool.Enqueue("test-key", func(execCtx context.Context) {
+		_, err := pool.Enqueue("test-key", func(execCtx context.Context) {
 			mu.Lock()
 			executed = true
 			executedCtx = execCtx

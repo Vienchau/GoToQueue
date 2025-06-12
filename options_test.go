@@ -20,7 +20,7 @@ func TestEnqueueWithContext(t *testing.T) {
 		var executed bool
 		var mu sync.Mutex
 
-		err := mq.Enqueue("test-key", func(execCtx context.Context) {
+		_, err := mq.Enqueue("test-key", func(execCtx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -47,7 +47,7 @@ func TestEnqueueWithContext(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			t.Error("Function should not execute with cancelled context")
 		}, WithContext(ctx))
 
@@ -91,7 +91,7 @@ func TestEnqueueWithContext(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
-		err := smallPool.Enqueue("test-key", func(ctx context.Context) {
+		_, err := smallPool.Enqueue("test-key", func(ctx context.Context) {
 			t.Error("Function should not execute due to context timeout")
 		}, WithContext(ctx))
 
@@ -117,7 +117,7 @@ func TestEnqueueWithTimeout(t *testing.T) {
 		var mu sync.Mutex
 		var capturedCtx context.Context
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			capturedCtx = ctx
@@ -176,7 +176,7 @@ func TestEnqueueWithTimeout(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		// Now try to enqueue with timeout - this should block and timeout
-		err := smallPool.Enqueue("test-key", func(ctx context.Context) {
+		_, err := smallPool.Enqueue("test-key", func(ctx context.Context) {
 			t.Error("Function should not execute due to timeout")
 		}, WithTimeout(50*time.Millisecond))
 
@@ -204,7 +204,7 @@ func TestEnqueueWithExpiration(t *testing.T) {
 		// First block the worker with a long task
 		var wg sync.WaitGroup
 		wg.Add(1)
-		err := smallPool.Enqueue("blocker", func(ctx context.Context) {
+		_, err := smallPool.Enqueue("blocker", func(ctx context.Context) {
 			defer wg.Done()
 			time.Sleep(200 * time.Millisecond) // Block the worker
 		})
@@ -217,7 +217,7 @@ func TestEnqueueWithExpiration(t *testing.T) {
 
 		var executed bool
 		var mu sync.Mutex
-		err = smallPool.Enqueue("test-key", func(ctx context.Context) {
+		_, err = smallPool.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -241,7 +241,7 @@ func TestEnqueueWithExpiration(t *testing.T) {
 	t.Run("item already expired at enqueue time", func(t *testing.T) {
 		expireTime := time.Now().Add(-1 * time.Second) // Already expired
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			t.Error("Already expired function should not execute")
 		}, WithExpiration(expireTime))
 
@@ -254,7 +254,7 @@ func TestEnqueueWithExpiration(t *testing.T) {
 		var executed bool
 		var mu sync.Mutex
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -279,14 +279,14 @@ func TestEnqueueWithExpiration(t *testing.T) {
 		defer smallPool.Stop()
 
 		// Block the worker
-		err := smallPool.Enqueue("blocker", func(ctx context.Context) {
+		_, err := smallPool.Enqueue("blocker", func(ctx context.Context) {
 			time.Sleep(200 * time.Millisecond)
 		})
 		if err != nil {
 			t.Fatalf("Failed to enqueue blocker: %v", err)
 		}
 
-		err = smallPool.Enqueue("test-key", func(ctx context.Context) {
+		_, err = smallPool.Enqueue("test-key", func(ctx context.Context) {
 			t.Error("Function should not execute due to expiration")
 		}, WithExpirationDuration(50*time.Millisecond))
 
@@ -314,7 +314,7 @@ func TestEnqueueWithMetadata(t *testing.T) {
 		var executed bool
 		var mu sync.Mutex
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -345,7 +345,7 @@ func TestEnqueueWithMetadata(t *testing.T) {
 		var executed bool
 		var mu sync.Mutex
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -367,7 +367,7 @@ func TestEnqueueWithMetadata(t *testing.T) {
 		var executed bool
 		var mu sync.Mutex
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -401,7 +401,7 @@ func TestEnqueueCombinedOptions(t *testing.T) {
 		var mu sync.Mutex
 		var capturedCtx context.Context
 
-		err := mq.Enqueue("test-key", func(execCtx context.Context) {
+		_, err := mq.Enqueue("test-key", func(execCtx context.Context) {
 			mu.Lock()
 			executed = true
 			capturedCtx = execCtx
@@ -441,7 +441,7 @@ func TestEnqueueCombinedOptions(t *testing.T) {
 		var mu sync.Mutex
 
 		// WithTimeout should create a new context based on the existing one
-		err := mq.Enqueue("test-key", func(ctx context.Context) {
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
@@ -550,7 +550,7 @@ func TestEnqueueErrorCases(t *testing.T) {
 		mq := NewPool(2, 10, KeyBased)
 		// Don't start the pool
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {})
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {})
 		if err != ErrQueueNotRunning {
 			t.Errorf("Expected ErrQueueNotRunning, got: %v", err)
 		}
@@ -563,7 +563,7 @@ func TestEnqueueErrorCases(t *testing.T) {
 		ctx := context.Background()
 		metadata := map[string]interface{}{"test": "value"}
 
-		err := mq.Enqueue("test-key", func(ctx context.Context) {},
+		_, err := mq.Enqueue("test-key", func(ctx context.Context) {},
 			WithContext(ctx),
 			WithTimeout(1*time.Second),
 			WithExpirationDuration(2*time.Second),
@@ -677,7 +677,7 @@ func TestConcurrentEnqueueWithOptions(t *testing.T) {
 				}
 
 				// Use a much longer timeout or no timeout for this test
-				err := mq.Enqueue(key, func(execCtx context.Context) {
+				_, err := mq.Enqueue(key, func(execCtx context.Context) {
 					defer executeWg.Done()
 					mu.Lock()
 					results[key] = true

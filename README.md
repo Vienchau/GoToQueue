@@ -4,7 +4,7 @@
 
 # Go To Queue
 
-> A high-performance, key-based worker queue implementation with FIFO ordering and concurrent processing capabilities.
+> Just a KeyBased/RoundRobin Work Queue coding with Copilot :)
 
 ## Features
 
