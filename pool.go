@@ -97,14 +97,25 @@ func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
 
 	for i := 0; i < poolSize; i++ {
 		pool.workers[i] = &Worker{
-			id:         i,
-			queue:      make(chan QueueItem, bufferSize),
-			stopSignal: make(chan struct{}),
-			wg:         &pool.wg,
+			id:           i,
+			queue:        make(chan QueueItem, bufferSize),
+			stopSignal:   make(chan struct{}),
+			wg:           &pool.wg,
+			logger:       &DefaultLogger{},    // Use default logger
+			panicHandler: DefaultPanicHandler, // Use default panic handler
 		}
 	}
 
 	return pool
+}
+
+func (p *Pool) SetPanicHandler(handler PanicHandler) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for _, worker := range p.workers {
+		worker.panicHandler = handler
+	}
 }
 
 // Start starts the worker pool.
@@ -159,6 +170,7 @@ func (p *Pool) Stop() {
 
 // Enqueue adds a new item to the queue with optional configuration.
 // This is the main method that uses the options pattern.
+// It returns the worker index where the item was enqueued, or an error if the operation failed.
 func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOption) (int, error) {
 	// Apply all options
 	options := applyEnqueueOptions(opts...)
