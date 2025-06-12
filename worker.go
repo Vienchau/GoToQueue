@@ -1,6 +1,7 @@
 package gotoqueue
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"runtime/debug"
@@ -74,6 +75,7 @@ func (w *Worker) start() {
 					}
 				} else {
 					// No context, execute directly with recovery
+					item.ctx = context.Background() // Ensure context is set
 					recovered, panicVal := w.safeExecute(&item)
 					if recovered {
 						log.Printf("Worker %d: Panic recovered for key: %s - %v",
