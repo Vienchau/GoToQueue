@@ -109,7 +109,7 @@ func TestSameKeyFIFOOrder(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		value := i
-		_, err := mq.Enqueue(key, func(ctx context.Context) {
+		id, err := mq.Enqueue(key, func(ctx context.Context) {
 			defer wg.Done()
 			// Add some delay to ensure ordering matters
 			time.Sleep(10 * time.Millisecond)
@@ -121,6 +121,7 @@ func TestSameKeyFIFOOrder(t *testing.T) {
 		if err != nil {
 			t.Errorf("Error enqueuing function %d: %v", i, err)
 		}
+		log.Printf("Enqueued function %d with ID %d", i, id)
 	}
 
 	// Wait for completion
@@ -217,7 +218,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 		// Enqueue 9 tasks (3x number of workers for even distribution)
 		for i := 0; i < 9; i++ {
 			key := fmt.Sprintf("task-%d", i)
-			_, err := pool.Enqueue(key, func(ctx context.Context) {
+			id, err := pool.Enqueue(key, func(ctx context.Context) {
 				mu.Lock()
 				defer mu.Unlock()
 				totalProcessed++
@@ -225,6 +226,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to enqueue task %d: %v", i, err)
 			}
+			log.Printf("Enqueued task %d with ID %d", i, id)
 		}
 
 		// Wait for all tasks to complete
@@ -259,13 +261,14 @@ func TestRoundRobinDistribution(t *testing.T) {
 
 		// Use the same key for all tasks - round robin should still distribute
 		for i := 0; i < 6; i++ {
-			_, err := pool.Enqueue("same-key", func(ctx context.Context) {
+			id, err := pool.Enqueue("same-key", func(ctx context.Context) {
 				// Simulate work to see distribution pattern
 				time.Sleep(10 * time.Millisecond)
 			})
 			if err != nil {
 				t.Fatalf("Failed to enqueue task %d: %v", i, err)
 			}
+			log.Printf("Enqueued task %d with ID %d", i, id)
 		}
 
 		// Check that tasks were distributed across workers
@@ -298,7 +301,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 
 		for i := 0; i < numTasks; i++ {
 			key := fmt.Sprintf("wrap-test-%d", i)
-			_, err := pool.Enqueue(key, func(ctx context.Context) {
+			id, err := pool.Enqueue(key, func(ctx context.Context) {
 				mu.Lock()
 				processedCount++
 				mu.Unlock()
@@ -306,6 +309,7 @@ func TestRoundRobinDistribution(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to enqueue task %d: %v", i, err)
 			}
+			log.Printf("Enqueued task %d with ID %d", i, id)
 		}
 
 		// Wait for processing
