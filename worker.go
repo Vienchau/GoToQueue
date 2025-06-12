@@ -3,7 +3,6 @@ package gotoqueue
 import (
 	"context"
 	"fmt"
-	"log"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -35,14 +34,14 @@ func (w *Worker) start() {
 		case item := <-w.queue:
 			// Check if item is expired before processing
 			if item.IsExpired() {
-				log.Printf("Worker %d: Skipping expired item with key: %s (age: %v)",
+				w.logger.Debugf("Worker %d: Skipping expired item with key: %s (age: %v)",
 					w.id, item.key, item.GetAge())
 				continue
 			}
 
 			// Check if item context is cancelled before processing
 			if item.IsCancelled() {
-				log.Printf("Worker %d: Skipping cancelled item with key: %s", w.id, item.key)
+				w.logger.Debugf("Worker %d: Skipping cancelled item with key: %s", w.id, item.key)
 				continue
 			}
 
@@ -62,15 +61,15 @@ func (w *Worker) start() {
 					select {
 					case <-done:
 						if recovered {
-							log.Printf("Worker %d: Panic recovered for key: %s - %v",
+							w.logger.Errorf("Worker %d: Panic recovered for key: %s - %v",
 								w.id, item.key, panicValue)
 						} else {
-							log.Printf("Worker %d: Completed item with key: %s (age: %v)",
+							w.logger.Debugf("Worker %d: Completed item with key: %s (age: %v)",
 								w.id, item.key, item.GetAge())
 						}
 					case <-item.ctx.Done():
 						// Context was cancelled during execution
-						log.Printf("Worker %d: Item cancelled during execution with key: %s (reason: %v)",
+						w.logger.Infof("Worker %d: Item cancelled during execution with key: %s (reason: %v)",
 							w.id, item.key, item.ctx.Err())
 					}
 				} else {
@@ -78,10 +77,10 @@ func (w *Worker) start() {
 					item.ctx = context.Background() // Ensure context is set
 					recovered, panicVal := w.safeExecute(&item)
 					if recovered {
-						log.Printf("Worker %d: Panic recovered for key: %s - %v",
+						w.logger.Errorf("Worker %d: Panic recovered for key: %s - %v",
 							w.id, item.key, panicVal)
 					} else {
-						log.Printf("Worker %d: Completed item with key: %s (age: %v)",
+						w.logger.Debugf("Worker %d: Completed item with key: %s (age: %v)",
 							w.id, item.key, item.GetAge())
 					}
 				}
@@ -89,7 +88,7 @@ func (w *Worker) start() {
 
 		case <-w.stopSignal:
 			// Drain remaining items in the queue before shutting down
-			log.Printf("Worker %d: Draining queue before shutdown", w.id)
+			w.logger.Infof("Worker %d: Draining queue before shutdown", w.id)
 			for {
 				select {
 				case item := <-w.queue:
@@ -97,15 +96,15 @@ func (w *Worker) start() {
 					if !item.IsExpired() && !item.IsCancelled() && item.fn != nil {
 						recovered, panicVal := w.safeExecute(&item) // <-- Use safeExecute
 						if recovered {
-							log.Printf("Worker %d: Panic recovered during shutdown for key: %s - %v",
+							w.logger.Errorf("Worker %d: Panic recovered for key: %s - %v",
 								w.id, item.key, panicVal)
 						} else {
-							log.Printf("Worker %d: Processed remaining item with key: %s during shutdown",
-								w.id, item.key)
+							w.logger.Debugf("Worker %d: Completed item with key: %s (age: %v)",
+								w.id, item.key, item.GetAge())
 						}
 					}
 				default:
-					log.Printf("Worker %d: Shutdown complete", w.id)
+					w.logger.Infof("Worker %d: Shutdown complete", w.id)
 					return
 				}
 			}
@@ -125,10 +124,9 @@ func (w *Worker) safeExecute(item *QueueItem) (recovered bool, panicValue interf
 
 			// Use custom logger if available
 			if w.logger != nil {
-				w.logger.Errorf("Worker %d: PANIC recovered for key '%s': %v",
-					w.id, item.key, r)
+				w.logger.Errorf("Worker %d: PANIC recovered for key '%s': %v", w.id, item.key, r)
 			}
-
+			w.logger.Debugf("Worker %d: Stack trace for key '%s':\n%s", w.id, item.key, string(stackTrace))
 			// Call configured panic handler or default
 			if w.panicHandler != nil {
 				w.panicHandler(item, r, stackTrace)
@@ -148,6 +146,7 @@ func (w *Worker) safeExecute(item *QueueItem) (recovered bool, panicValue interf
 	}()
 
 	// Execute the function
+	w.logger.Debugf("Worker %d: Executing task with key: %s", w.id, item.key)
 	item.fn(item.ctx)
 	return false, nil
 }

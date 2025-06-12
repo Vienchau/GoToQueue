@@ -56,6 +56,8 @@ type Pool struct {
 	wg              sync.WaitGroup // WaitGroup to wait for all workers to finish processing
 	mutex           sync.Mutex     // Mutex to protect access to the pool state
 	isRunning       bool           // Indicates if the pool is currently running
+	logger          Logger         // Pool-level logger
+	logLevel        LogLevel       // Current log level
 }
 
 // to calculates the index of the worker based on the key.
@@ -88,11 +90,15 @@ func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
 		bufferSize = 100 // Ensure at least one item can be buffered
 	}
 
+	logger := NewDefaultLogger(LogLevelInfo)
+
 	pool := &Pool{
 		size:      poolSize,
 		workers:   make([]*Worker, poolSize),
 		isRunning: false,
 		strategy:  s,
+		logger:    logger,
+		logLevel:  LogLevelInfo,
 	}
 
 	for i := 0; i < poolSize; i++ {
@@ -101,7 +107,7 @@ func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
 			queue:        make(chan QueueItem, bufferSize),
 			stopSignal:   make(chan struct{}),
 			wg:           &pool.wg,
-			logger:       &DefaultLogger{},    // Use default logger
+			logger:       logger,              // Share pool logger with workers
 			panicHandler: DefaultPanicHandler, // Use default panic handler
 		}
 	}
@@ -115,6 +121,46 @@ func (p *Pool) SetPanicHandler(handler PanicHandler) {
 
 	for _, worker := range p.workers {
 		worker.panicHandler = handler
+	}
+}
+
+// SetLogLevel sets the log level for the pool and all workers
+func (p *Pool) SetLogLevel(level string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.logLevel = ParseLogLevel(level)
+
+	// Update pool logger
+	if p.logger != nil {
+		p.logger.SetLevel(p.logLevel)
+	}
+
+	// Update all worker loggers
+	for _, worker := range p.workers {
+		if worker.logger != nil {
+			worker.logger.SetLevel(p.logLevel)
+		}
+	}
+}
+
+// GetLogLevel returns the current log level
+func (p *Pool) GetLogLevel() LogLevel {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.logLevel
+}
+
+// SetLogger sets a custom logger for the pool and all workers
+func (p *Pool) SetLogger(logger Logger) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	p.logger = logger
+
+	// Update all worker loggers
+	for _, worker := range p.workers {
+		worker.logger = logger
 	}
 }
 
