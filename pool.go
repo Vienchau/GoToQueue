@@ -205,55 +205,6 @@ func (p *Pool) Start() {
 	go p.handleShutdownSignal()
 }
 
-// StopGracefully stops the pool and waits for all queued items to be processed
-// It signals all workers to stop accepting new work but allows them to finish processing current items.
-// If the pool is already stopped, it does nothing.
-func (p *Pool) StopGracefully(timeout time.Duration) error {
-	p.mutex.Lock()
-	if !p.isRunning {
-		p.mutex.Unlock()
-		return nil
-	}
-
-	p.logger.Infof("Starting graceful shutdown, draining %d remaining items...", p.GetTotalQueueLength())
-	p.isRunning = false
-	p.mutex.Unlock()
-
-	// Create a timeout context
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Channel to signal completion
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-
-		// Signal all workers to stop accepting new work but finish current work
-		for _, worker := range p.workers {
-			close(worker.stopSignal)
-		}
-
-		// Wait for all workers to finish
-		p.wg.Wait()
-
-		// Close all queues
-		for i := 0; i < p.size; i++ {
-			close(p.workers[i].queue)
-		}
-	}()
-
-	// Wait for either completion or timeout
-	select {
-	case <-done:
-		p.logger.Infof("Graceful shutdown completed successfully")
-		return nil
-	case <-ctx.Done():
-		p.logger.Errorf("Graceful shutdown timed out after %v", timeout)
-		return ctx.Err()
-	}
-}
-
 // Stop stops the worker pool.
 // It signals all workers to stop and waits for them to finish processing.
 // If the pool is already stopped, it does nothing.
