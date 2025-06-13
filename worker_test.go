@@ -778,8 +778,29 @@ func TestPanicRecovery(t *testing.T) {
 
 // MockLogger for testing panic logging
 type MockLogger struct {
-	onPrintf func(format string, v ...interface{})
+	onDebugf func(format string, v ...interface{})
+	onInfof  func(format string, v ...interface{})
 	onErrorf func(format string, v ...interface{})
+	onPrintf func(format string, v ...interface{})
+	level    LogLevel
+}
+
+func (ml *MockLogger) Debugf(format string, v ...interface{}) {
+	if ml.onDebugf != nil {
+		ml.onDebugf(format, v...)
+	}
+}
+
+func (ml *MockLogger) Infof(format string, v ...interface{}) {
+	if ml.onInfof != nil {
+		ml.onInfof(format, v...)
+	}
+}
+
+func (ml *MockLogger) Errorf(format string, v ...interface{}) {
+	if ml.onErrorf != nil {
+		ml.onErrorf(format, v...)
+	}
 }
 
 func (ml *MockLogger) Printf(format string, v ...interface{}) {
@@ -788,10 +809,12 @@ func (ml *MockLogger) Printf(format string, v ...interface{}) {
 	}
 }
 
-func (ml *MockLogger) Errorf(format string, v ...interface{}) {
-	if ml.onErrorf != nil {
-		ml.onErrorf(format, v...)
-	}
+func (ml *MockLogger) SetLevel(level LogLevel) {
+	ml.level = level
+}
+
+func (ml *MockLogger) GetLevel() LogLevel {
+	return ml.level
 }
 
 // TestCustomPanicHandler tests custom panic handler functionality
@@ -815,7 +838,7 @@ func TestCustomPanicHandler(t *testing.T) {
 		pool := NewPool(1, 5, KeyBased)
 		worker := pool.workers[0]
 		worker.panicHandler = customHandler
-		worker.logger = &DefaultLogger{}
+		worker.logger = NewDefaultLogger(LogLevelInfo)
 
 		panicMessage := "custom handler test panic"
 		item := &QueueItem{
@@ -996,6 +1019,81 @@ func TestPanicRecoveryIntegration(t *testing.T) {
 
 		if atomic.LoadInt64(&completed) != expectedCompleted {
 			t.Errorf("Expected %d completed tasks, got %d", expectedCompleted, atomic.LoadInt64(&completed))
+		}
+	})
+}
+
+// TestMockLoggerInterface tests the MockLogger implementation of the Logger interface
+func TestMockLoggerInterface(t *testing.T) {
+	t.Run("MockLogger implements all Logger interface methods", func(t *testing.T) {
+		var debugLogs, infoLogs, errorLogs, printfLogs []string
+		var mu sync.Mutex
+
+		mockLogger := &MockLogger{
+			onDebugf: func(format string, v ...interface{}) {
+				mu.Lock()
+				debugLogs = append(debugLogs, fmt.Sprintf(format, v...))
+				mu.Unlock()
+			},
+			onInfof: func(format string, v ...interface{}) {
+				mu.Lock()
+				infoLogs = append(infoLogs, fmt.Sprintf(format, v...))
+				mu.Unlock()
+			},
+			onErrorf: func(format string, v ...interface{}) {
+				mu.Lock()
+				errorLogs = append(errorLogs, fmt.Sprintf(format, v...))
+				mu.Unlock()
+			},
+			onPrintf: func(format string, v ...interface{}) {
+				mu.Lock()
+				printfLogs = append(printfLogs, fmt.Sprintf(format, v...))
+				mu.Unlock()
+			},
+		}
+
+		// Test all logging methods
+		mockLogger.Debugf("Debug message %d", 1)
+		mockLogger.Infof("Info message %d", 2)
+		mockLogger.Errorf("Error message %d", 3)
+		mockLogger.Printf("Printf message %d", 4)
+
+		// Test level methods
+		mockLogger.SetLevel(LogLevelError)
+		if mockLogger.GetLevel() != LogLevelError {
+			t.Errorf("Expected log level %v, got %v", LogLevelError, mockLogger.GetLevel())
+		}
+
+		mu.Lock()
+		if len(debugLogs) != 1 || debugLogs[0] != "Debug message 1" {
+			t.Errorf("Expected debug log 'Debug message 1', got %v", debugLogs)
+		}
+		if len(infoLogs) != 1 || infoLogs[0] != "Info message 2" {
+			t.Errorf("Expected info log 'Info message 2', got %v", infoLogs)
+		}
+		if len(errorLogs) != 1 || errorLogs[0] != "Error message 3" {
+			t.Errorf("Expected error log 'Error message 3', got %v", errorLogs)
+		}
+		if len(printfLogs) != 1 || printfLogs[0] != "Printf message 4" {
+			t.Errorf("Expected printf log 'Printf message 4', got %v", printfLogs)
+		}
+		mu.Unlock()
+	})
+
+	t.Run("MockLogger works with nil callbacks", func(t *testing.T) {
+		// Create MockLogger with no callbacks set
+		mockLogger := &MockLogger{}
+
+		// These should not panic
+		mockLogger.Debugf("Debug message")
+		mockLogger.Infof("Info message")
+		mockLogger.Errorf("Error message")
+		mockLogger.Printf("Printf message")
+
+		// Level methods should work
+		mockLogger.SetLevel(LogLevelDebug)
+		if mockLogger.GetLevel() != LogLevelDebug {
+			t.Errorf("Expected log level %v, got %v", LogLevelDebug, mockLogger.GetLevel())
 		}
 	})
 }
