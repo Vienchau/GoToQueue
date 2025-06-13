@@ -98,7 +98,7 @@ func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
 		isRunning: false,
 		strategy:  s,
 		logger:    logger,
-		logLevel:  LogLevelInfo,
+		logLevel:  LogLevelSilent,
 	}
 
 	for i := 0; i < poolSize; i++ {
