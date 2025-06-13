@@ -33,8 +33,11 @@ package gotoqueue
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/spaolacci/murmur3"
@@ -49,15 +52,17 @@ const (
 
 // Pool represents a pool of workers that can process items from the queue.
 type Pool struct {
-	strategy        Strategy       // Strategy for distributing items to workers
-	roundRobinIndex int64          // Atomic index for round-robin strategy
-	workers         []*Worker      // Slice of workers in the pool
-	size            int            // Number of workers in the pool
-	wg              sync.WaitGroup // WaitGroup to wait for all workers to finish processing
-	mutex           sync.Mutex     // Mutex to protect access to the pool state
-	isRunning       bool           // Indicates if the pool is currently running
-	logger          Logger         // Pool-level logger
-	logLevel        LogLevel       // Current log level
+	strategy         Strategy       // Strategy for distributing items to workers
+	roundRobinIndex  int64          // Atomic index for round-robin strategy
+	workers          []*Worker      // Slice of workers in the pool
+	size             int            // Number of workers in the pool
+	wg               sync.WaitGroup // WaitGroup to wait for all workers to finish processing
+	mutex            sync.Mutex     // Mutex to protect access to the pool state
+	isRunning        bool           // Indicates if the pool is currently running
+	logger           Logger         // Pool-level logger
+	logLevel         LogLevel       // Current log level
+	shutdownSignal   chan os.Signal // Channel to handle OS signals for graceful shutdown
+	gracefulShutdown bool           // Flag to indicate if the pool should shut down gracefully
 }
 
 // to calculates the index of the worker based on the key.
@@ -93,12 +98,13 @@ func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
 	logger := NewDefaultLogger(LogLevelInfo)
 
 	pool := &Pool{
-		size:      poolSize,
-		workers:   make([]*Worker, poolSize),
-		isRunning: false,
-		strategy:  s,
-		logger:    logger,
-		logLevel:  LogLevelSilent,
+		size:             poolSize,
+		workers:          make([]*Worker, poolSize),
+		isRunning:        false,
+		strategy:         s,
+		logger:           logger,
+		logLevel:         LogLevelSilent,
+		gracefulShutdown: false,
 	}
 
 	for i := 0; i < poolSize; i++ {
@@ -113,6 +119,14 @@ func NewPool(poolSize int, bufferSize int, s Strategy) *Pool {
 	}
 
 	return pool
+}
+
+// handleShutdownSignal listens for shutdown signals and initiates graceful shutdown
+func (p *Pool) handleShutdownSignal() {
+	<-p.shutdownSignal
+	p.logger.Infof("Received shutdown signal, starting graceful shutdown...")
+	p.gracefulShutdown = true
+	p.Stop()
 }
 
 func (p *Pool) SetPanicHandler(handler PanicHandler) {
@@ -178,10 +192,65 @@ func (p *Pool) Start() {
 
 	p.isRunning = true
 
+	p.shutdownSignal = make(chan os.Signal, 1)
+	signal.Notify(p.shutdownSignal, syscall.SIGINT, syscall.SIGTERM)
+
 	// Start all workers
 	for i := 0; i < p.size; i++ {
 		p.wg.Add(1)
 		go p.workers[i].start()
+	}
+
+	// Start a goroutine to handle shutdown signals
+	go p.handleShutdownSignal()
+}
+
+// StopGracefully stops the pool and waits for all queued items to be processed
+// It signals all workers to stop accepting new work but allows them to finish processing current items.
+// If the pool is already stopped, it does nothing.
+func (p *Pool) StopGracefully(timeout time.Duration) error {
+	p.mutex.Lock()
+	if !p.isRunning {
+		p.mutex.Unlock()
+		return nil
+	}
+
+	p.logger.Infof("Starting graceful shutdown, draining %d remaining items...", p.GetTotalQueueLength())
+	p.isRunning = false
+	p.mutex.Unlock()
+
+	// Create a timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// Channel to signal completion
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		// Signal all workers to stop accepting new work but finish current work
+		for _, worker := range p.workers {
+			close(worker.stopSignal)
+		}
+
+		// Wait for all workers to finish
+		p.wg.Wait()
+
+		// Close all queues
+		for i := 0; i < p.size; i++ {
+			close(p.workers[i].queue)
+		}
+	}()
+
+	// Wait for either completion or timeout
+	select {
+	case <-done:
+		p.logger.Infof("Graceful shutdown completed successfully")
+		return nil
+	case <-ctx.Done():
+		p.logger.Errorf("Graceful shutdown timed out after %v", timeout)
+		return ctx.Err()
 	}
 }
 
