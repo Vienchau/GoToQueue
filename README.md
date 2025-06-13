@@ -45,20 +45,19 @@ func main() {
     pool.Start()
     defer pool.Stop()
 
-    // Basic enqueue
+    // Basic enqueue with type-safe metadata
     pool.Enqueue("user:123", func(ctx context.Context) {
-        fmt.Println("Processing user 123")
-    })
+        if userID, ok := gotoqueue.GetMetadata(ctx, "user_id"); ok {
+            fmt.Printf("Processing user: %v\n", userID)
+        }
+    }, gotoqueue.WithMetadata(map[string]interface{}{
+        "user_id": "user:123",
+    }))
 
-    // With timeout
+    // With expiration duration
     pool.Enqueue("order:456", func(ctx context.Context) {
         fmt.Println("Processing order 456")
-    }, gotoqueue.WithTimeout(5*time.Second))
-
-    // With expiration
-    pool.Enqueue("task:789", func(ctx context.Context) {
-        fmt.Println("Processing task 789")
-    }, gotoqueue.WithExpirationDuration(10*time.Minute))
+    }, gotoqueue.WithExpirationDuration(5*time.Second))
     
     time.Sleep(100 * time.Millisecond) // Wait for processing
 }
@@ -223,32 +222,86 @@ pool.Enqueue("task:abc", myFunc, gotoqueue.WithExpiration(expireTime))
 pool.Enqueue("task:def", myFunc, gotoqueue.WithExpirationDuration(5*time.Minute))
 ```
 
-### Metadata
+### Metadata and Context Keys
+
+The library provides type-safe metadata handling to avoid context key collisions:
+
 ```go
-// Add metadata to tasks (automatically injected into context)
+// Type-safe metadata access (recommended)
 pool.Enqueue("order:123", func(ctx context.Context) {
-    // Access metadata from context
-    userID := ctx.Value("user_id")
-    priority := ctx.Value("priority")
-    fmt.Printf("Processing %s priority order for user %v\n", priority, userID)
+    // Use GetMetadata for type-safe access
+    if userID, ok := gotoqueue.GetMetadata(ctx, "user_id"); ok {
+        fmt.Printf("User ID: %v\n", userID)
+    }
+    if priority, ok := gotoqueue.GetMetadata(ctx, "priority"); ok {
+        fmt.Printf("Priority: %v\n", priority)
+    }
 }, gotoqueue.WithMetadata(map[string]interface{}{
     "priority": "high",
     "user_id":  12345,
     "retry":    3,
 }))
+
+// Legacy approach (not recommended due to context key collisions)
+pool.Enqueue("order:456", func(ctx context.Context) {
+    userID := ctx.Value("user_id") // Can cause collisions
+    fmt.Printf("User ID: %v\n", userID)
+}, gotoqueue.WithMetadata(map[string]interface{}{
+    "user_id": "legacy-access",
+}))
+```
+
+#### Type-Safe Context Keys
+
+The library uses custom `ContextKey` types to prevent context key collisions:
+
+```go
+// Custom context key type prevents collisions
+type ContextKey string
+
+// MetadataKey creates a namespaced context key
+func MetadataKey(key string) ContextKey {
+    return ContextKey("metadata:" + key)
+}
+
+// GetMetadata provides type-safe metadata extraction
+func GetMetadata(ctx context.Context, key string) (interface{}, bool) {
+    value := ctx.Value(MetadataKey(key))
+    return value, value != nil
+}
 ```
 
 
-## Options Pattern
+## API Reference
+
+### Core Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `NewPool(workers, buffer, strategy)` | Create new worker pool | `NewPool(4, 100, KeyBased)` |
+| `pool.Start()` | Start the worker pool | `pool.Start()` |
+| `pool.Stop()` | Stop the worker pool | `pool.Stop()` |
+| `pool.Enqueue(key, fn, opts...)` | Add task to queue | `pool.Enqueue("user:123", taskFunc)` |
+
+### Metadata Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `GetMetadata(ctx, key)` | Type-safe metadata extraction | `GetMetadata(ctx, "user_id")` |
+| `MetadataKey(key)` | Create namespaced context key | `MetadataKey("custom_field")` |
+
+### Options Pattern
 
 | Option | Description | Example |
 |--------|-------------|---------|
 | `WithContext(ctx)` | Provides context for cancellation | `WithContext(ctx)` |
 | `WithExpiration(time)` | Item expires at specific time | `WithExpiration(time.Now().Add(1*time.Hour))` |
 | `WithExpirationDuration(duration)` | Item expires after duration | `WithExpirationDuration(5*time.Minute)` |
-| `WithMetadata(map)` | Attach custom metadata (injected into context) | `WithMetadata(map[string]interface{}{"key": "value"})` |
+| `WithMetadata(map)` | Attach custom metadata (injected into context with type-safe keys) | `WithMetadata(map[string]interface{}{"key": "value"})` |
 
-> **Note**: `WithTimeout` has been removed. Use `context.WithTimeout()` or `context.WithDeadline()` for timeout functionality.
+> **Note**: 
+> - `WithTimeout` has been removed. Use `context.WithTimeout()` or `context.WithDeadline()` for timeout functionality.
+> - Metadata is automatically injected into context using type-safe keys to prevent collisions. Use `GetMetadata()` for extraction.
 
 ## Pool Management
 

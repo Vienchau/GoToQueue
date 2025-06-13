@@ -8,6 +8,19 @@ import (
 	"time"
 )
 
+type ContextKey string
+
+// MetadataKey wraps a string to create a unique context key
+func MetadataKey(key string) ContextKey {
+	return ContextKey("metadata:" + key)
+}
+
+// GetMetadata retrieves metadata from context using the custom key type
+func GetMetadata(ctx context.Context, key string) (interface{}, bool) {
+	value := ctx.Value(MetadataKey(key))
+	return value, value != nil
+}
+
 // Worker is responsible for processing items from the queue.
 // Each worker has a unique ID, a channel to receive items, and a stop signal.
 // Workers will process items in the order they are received, and they will only process one item at a time.
@@ -150,7 +163,7 @@ func (w *Worker) safeExecute(item *QueueItem) (recovered bool, panicValue interf
 	// apply metadata to context if available
 	if item.ctx != nil && item.metadata != nil {
 		for k, v := range item.metadata {
-			item.ctx = context.WithValue(item.ctx, k, v)
+			item.ctx = context.WithValue(item.ctx, MetadataKey(k), v)
 		}
 	}
 

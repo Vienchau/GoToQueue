@@ -9,15 +9,22 @@ import (
 )
 
 func processUserinOneSecond(ctx context.Context) {
-	userID := ctx.Value("user_id")
-	fmt.Printf("User ID: %v\n", userID)
+	var userID interface{}
+	var ok bool
+	if userID, ok = gotoqueue.GetMetadata(ctx, "user_id"); ok {
+		fmt.Printf("User ID: %s\n", userID)
+	}
+
 	time.Sleep(time.Second * 1)
 	fmt.Printf("User ID: %v processed successfully\n", userID)
 }
 
 func processUserWithContextAwareness(ctx context.Context) {
-	userID := ctx.Value("user_id")
-	fmt.Printf("Start user ID: %v\n", userID)
+	var userID interface{}
+	var ok bool
+	if userID, ok = gotoqueue.GetMetadata(ctx, "user_id"); ok {
+		fmt.Printf("User ID: %s\n", userID)
+	}
 
 	// Approach 1: Use select with timer for context-aware sleep
 	select {
