@@ -14,8 +14,11 @@
 - **Concurrent workers**: Multiple workers process tasks in parallel  
 - **Context support**: Timeout and cancellation handling
 - **Expiration**: Items can expire before processing
-- **Metadata**: Attach custom data to queue items
+- **Metadata**: Attach custom data to queue items (automatically injected into context)
 - **Thread-safe**: Safe for concurrent use across multiple goroutines
+- **Panic recovery**: Workers automatically recover from panics and continue processing
+- **Structured logging**: Configurable log levels (DEBUG, INFO, ERROR, SILENT)
+- **Graceful shutdown**: Automatic OS signal handling with queue draining
 
 ## Installation
 
@@ -144,25 +147,14 @@ pool.Enqueue("any-key", task4) // → Worker 0 (wraps around)
               └── Calculate worker index
                       │
                       ▼
-              [Enqueueing Strategy]
+              [Blocking Enqueue]
               ┌─────────────────────────┐
-              │ Has Context?            │
-              └─────────┬───────────────┘
-                       / \
-                  YES /   \ NO
-                     /     \
-                    ▼       ▼
-         [Context-Aware]   [Blocking]
-         ┌─────────────┐   ┌─────────┐
-         │ select {    │   │ channel │
-         │   send      │   │ <- item │
-         │   timeout   │   │ (wait)  │
-         │ }           │   └─────────┘
-         └─────────────┘       │
-                │              │
-                ▼              ▼
-          [Return: nil       [Return: nil
-           or ctx.Err()]     (always)]
+              │ channel <- item         │
+              │ (blocking send)         │
+              └─────────────────────────┘
+                      │
+                      ▼
+              [Return worker index]
 ```
 
 ## Usage Examples
@@ -219,12 +211,6 @@ err := pool.Enqueue("task:456", func(ctx context.Context) {
         fmt.Println("Task cancelled:", ctx.Err())
     }
 }, gotoqueue.WithContext(ctx))
-
-// With timeout (creates context automatically)
-err = pool.Enqueue("task:789", func(ctx context.Context) {
-    time.Sleep(1 * time.Second)
-    fmt.Println("Quick task done")
-})
 ```
 
 ### Expiration
@@ -239,10 +225,12 @@ pool.Enqueue("task:def", myFunc, gotoqueue.WithExpirationDuration(5*time.Minute)
 
 ### Metadata
 ```go
-// Add metadata to tasks
+// Add metadata to tasks (automatically injected into context)
 pool.Enqueue("order:123", func(ctx context.Context) {
-    // Access metadata within the function if needed
-    fmt.Println("Processing high priority order")
+    // Access metadata from context
+    userID := ctx.Value("user_id")
+    priority := ctx.Value("priority")
+    fmt.Printf("Processing %s priority order for user %v\n", priority, userID)
 }, gotoqueue.WithMetadata(map[string]interface{}{
     "priority": "high",
     "user_id":  12345,
@@ -250,31 +238,17 @@ pool.Enqueue("order:123", func(ctx context.Context) {
 }))
 ```
 
-### Combined Options
-```go
-// Use multiple options together
-pool.Enqueue("complex:task", func(ctx context.Context) {
-    // Complex processing logic
-    fmt.Println("Processing complex task with all options")
-}, 
-    gotoqueue.WithTimeout(10*time.Second),
-    gotoqueue.WithExpirationDuration(5*time.Minute),
-    gotoqueue.WithMetadata(map[string]interface{}{
-        "priority": "critical",
-        "retries":  5,
-    }),
-)
-```
 
 ## Options Pattern
 
 | Option | Description | Example |
 |--------|-------------|---------|
 | `WithContext(ctx)` | Provides context for cancellation | `WithContext(ctx)` |
-| `WithTimeout(duration)` | Sets timeout (creates context) | `WithTimeout(30*time.Second)` |
 | `WithExpiration(time)` | Item expires at specific time | `WithExpiration(time.Now().Add(1*time.Hour))` |
 | `WithExpirationDuration(duration)` | Item expires after duration | `WithExpirationDuration(5*time.Minute)` |
-| `WithMetadata(map)` | Attach custom metadata | `WithMetadata(map[string]interface{}{"key": "value"})` |
+| `WithMetadata(map)` | Attach custom metadata (injected into context) | `WithMetadata(map[string]interface{}{"key": "value"})` |
+
+> **Note**: `WithTimeout` has been removed. Use `context.WithTimeout()` or `context.WithDeadline()` for timeout functionality.
 
 ## Pool Management
 
@@ -291,7 +265,37 @@ workerQueue, err := pool.GetQueueLength(0) // Queue length for worker 0
 
 fmt.Printf("Pool: %d workers, %d total items, worker 0 has %d items\n", 
     poolSize, totalQueued, workerQueue)
+
+// Set logging level (DEBUG, INFO, ERROR, SILENT)
+pool.SetLogLevel("DEBUG") // Enable debug logging
+pool.SetLogLevel("SILENT") // Disable all logging (default)
+
+// Alternative: use constants
+pool.SetLogLevel(gotoqueue.LOG_DEBUG)
+pool.SetLogLevel(gotoqueue.LOG_SILENT)
+
+// Set custom panic handler
+pool.SetPanicHandler(func(item *gotoqueue.QueueItem, panicValue interface{}, stackTrace []byte) {
+    fmt.Printf("Custom panic handler: %v\n", panicValue)
+})
 ```
+
+## Error Handling & Recovery
+
+The library includes robust error handling and panic recovery:
+
+- **Automatic Panic Recovery**: Workers automatically recover from panics and continue processing
+- **Panic Metadata**: Panic information is stored in item metadata for debugging
+- **Custom Panic Handlers**: Configure custom panic handling logic
+- **Structured Logging**: Debug information with configurable log levels
+
+## Graceful Shutdown
+
+The pool automatically handles OS signals (SIGINT, SIGTERM) for graceful shutdown:
+
+- Signal handler drains all queues before stopping
+- No manual `StopGracefully()` call needed
+- Workers complete current tasks before shutdown
 
 ## Testing
 
@@ -309,7 +313,7 @@ go test -race ./...
 
 ## Examples
 
-See the [example](./example) directory for a complete working example showcasing all features.
+See the [examples](./examples) directory for complete working examples showcasing all features.
 
 ## Contributing
 

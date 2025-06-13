@@ -11,8 +11,25 @@ import (
 func processUserinOneSecond(ctx context.Context) {
 	userID := ctx.Value("user_id")
 	fmt.Printf("User ID: %v\n", userID)
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 1)
 	fmt.Printf("User ID: %v processed successfully\n", userID)
+}
+
+func processUserWithContextAwareness(ctx context.Context) {
+	userID := ctx.Value("user_id")
+	fmt.Printf("Start user ID: %v\n", userID)
+
+	// Approach 1: Use select with timer for context-aware sleep
+	select {
+	case <-time.After(5 * time.Second):
+		// Work completed normally
+		fmt.Printf("Processing user ID: %v\n", userID)
+		fmt.Printf("User ID: %v processed successfully\n", userID)
+	case <-ctx.Done():
+		// Context was cancelled/timed out
+		fmt.Printf("Function cancelled due to context: %v\n", ctx.Err())
+		return
+	}
 }
 
 func main() {
@@ -27,7 +44,7 @@ func main() {
 
 	// Basic enqueue
 	fmt.Println("\n1. Basic enqueue:")
-	for index := 0; index < 10; index++ {
+	for index := 0; index < 2; index++ {
 		id, err := pool.Enqueue(
 			fmt.Sprintf("user:%d", index),
 			processUserinOneSecond,
@@ -46,5 +63,21 @@ func main() {
 		fmt.Printf("Enqueued user: %s with ID: %d\n", fmt.Sprintf("user:%d", index), id)
 	}
 
-	fmt.Printf("Enqueue done!")
+	// Enqueue with context awareness
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	fmt.Println("\n2. Enqueue with context awareness:")
+	pool.Enqueue(
+		"user:context_aware",
+		processUserWithContextAwareness,
+		gotoqueue.WithContext(ctx),
+		gotoqueue.WithMetadata(
+			map[string]interface{}{
+				"user_id": "user:context_aware",
+			},
+		),
+	)
+	fmt.Printf("Enqueued user with context awareness: %s\n", "user:context_aware")
+	time.Sleep(10 * time.Second) // Wait for the context to expire
 }

@@ -15,7 +15,6 @@ type QueueItem struct {
 	metadata    map[string]interface{}
 	enqueueTime time.Time
 	expireTime  time.Time
-	timeout     time.Duration // Timeout for the task execution
 }
 
 // IsExpired checks if the queue item has expired
