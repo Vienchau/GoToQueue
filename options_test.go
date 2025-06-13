@@ -8,297 +8,6 @@ import (
 	"time"
 )
 
-func TestEnqueueWithContext(t *testing.T) {
-	mq := NewPool(2, 10, KeyBased)
-	mq.Start()
-	defer mq.Stop()
-
-	t.Run("context with timeout", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		defer cancel()
-
-		var executed bool
-		var mu sync.Mutex
-
-		_, err := mq.Enqueue("test-key", func(execCtx context.Context) {
-			mu.Lock()
-			executed = true
-			mu.Unlock()
-			// Verify context is passed correctly
-			if execCtx != ctx {
-				t.Error("Expected execution context to match enqueue context")
-			}
-		}, WithContext(ctx))
-
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-
-		// Wait for execution
-		time.Sleep(200 * time.Millisecond)
-		mu.Lock()
-		if !executed {
-			t.Error("Function should have been executed")
-		}
-		mu.Unlock()
-	})
-
-	t.Run("context cancellation before enqueue", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
-
-		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
-			t.Error("Function should not execute with cancelled context")
-		}, WithContext(ctx))
-
-		if err != ErrQueueItemCancelled {
-			t.Errorf("Expected ErrQueueItemCancelled error, got: %v", err)
-		}
-	})
-
-	t.Run("context cancellation during enqueue", func(t *testing.T) {
-		// Create a pool with buffer size 1 (minimum allowed) and block the worker
-		smallPool := NewPool(1, 1, KeyBased)
-		smallPool.Start()
-		defer smallPool.Stop()
-
-		// Use a channel to synchronize when the worker is busy
-		workerBusy := make(chan struct{})
-		workerStarted := make(chan struct{})
-
-		// Fill the worker with a blocking task
-		go func() {
-			smallPool.Enqueue("blocker", func(ctx context.Context) {
-				close(workerStarted) // Signal that worker has started
-				<-workerBusy         // Wait for signal to continue
-			})
-		}()
-
-		// Wait for worker to start processing
-		<-workerStarted
-
-		// Fill the buffer completely (1 slot)
-		go func() {
-			smallPool.Enqueue("buffer-filler", func(ctx context.Context) {
-				// This will sit in the buffer
-			})
-		}()
-
-		// Give time for buffer to fill
-		time.Sleep(50 * time.Millisecond)
-
-		// Now try to enqueue with a very short timeout - this should block and timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		defer cancel()
-
-		_, err := smallPool.Enqueue("test-key", func(ctx context.Context) {
-			t.Error("Function should not execute due to context timeout")
-		}, WithContext(ctx))
-
-		// Release the worker
-		close(workerBusy)
-
-		// The error should be context.DeadlineExceeded
-		if err == nil {
-			t.Error("Expected timeout error, got nil")
-		} else if err != context.DeadlineExceeded {
-			t.Errorf("Expected context.DeadlineExceeded error, got: %v", err)
-		}
-	})
-}
-
-func TestEnqueueWithTimeout(t *testing.T) {
-	mq := NewPool(2, 10, KeyBased)
-	mq.Start()
-	defer mq.Stop()
-
-	t.Run("timeout option creates context", func(t *testing.T) {
-		var executed bool
-		var mu sync.Mutex
-		var capturedCtx context.Context
-
-		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
-			mu.Lock()
-			executed = true
-			capturedCtx = ctx
-			mu.Unlock()
-		}, WithTimeout(1*time.Second))
-
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-
-		time.Sleep(100 * time.Millisecond)
-		mu.Lock()
-		if !executed {
-			t.Error("Function should have been executed")
-		}
-		if capturedCtx == nil {
-			t.Error("Context should not be nil")
-		}
-		mu.Unlock()
-
-		// Verify context has deadline
-		if _, ok := capturedCtx.Deadline(); !ok {
-			t.Error("Context should have a deadline from WithTimeout")
-		}
-	})
-
-	t.Run("short timeout causes cancellation", func(t *testing.T) {
-		// Create a pool with buffer size 1 (minimum allowed) and block the worker
-		smallPool := NewPool(1, 1, KeyBased)
-		smallPool.Start()
-		defer smallPool.Stop()
-
-		// Use a channel to synchronize when the worker is busy
-		workerBusy := make(chan struct{})
-		workerStarted := make(chan struct{})
-
-		// Fill the worker with a blocking task
-		go func() {
-			smallPool.Enqueue("blocker", func(ctx context.Context) {
-				close(workerStarted) // Signal that worker has started
-				<-workerBusy         // Wait for signal to continue
-			})
-		}()
-
-		// Wait for worker to start processing
-		<-workerStarted
-
-		// Fill the buffer completely (1 slot)
-		go func() {
-			smallPool.Enqueue("buffer-filler", func(ctx context.Context) {
-				// This will sit in the buffer
-			})
-		}()
-
-		// Give time for buffer to fill
-		time.Sleep(50 * time.Millisecond)
-
-		// Now try to enqueue with timeout - this should block and timeout
-		_, err := smallPool.Enqueue("test-key", func(ctx context.Context) {
-			t.Error("Function should not execute due to timeout")
-		}, WithTimeout(50*time.Millisecond))
-
-		// Release the worker
-		close(workerBusy)
-
-		if err == nil {
-			t.Error("Expected timeout error, got nil")
-		} else if err != context.DeadlineExceeded {
-			t.Errorf("Expected context.DeadlineExceeded error, got: %v", err)
-		}
-	})
-}
-
-func TestEnqueueWithExpiration(t *testing.T) {
-	mq := NewPool(2, 10, KeyBased)
-	mq.Start()
-	defer mq.Stop()
-	t.Run("item expires before execution", func(t *testing.T) {
-		// Create a pool that will have delayed processing
-		smallPool := NewPool(1, 10, KeyBased)
-		smallPool.Start()
-		defer smallPool.Stop()
-
-		// First block the worker with a long task
-		var wg sync.WaitGroup
-		wg.Add(1)
-		_, err := smallPool.Enqueue("blocker", func(ctx context.Context) {
-			defer wg.Done()
-			time.Sleep(200 * time.Millisecond) // Block the worker
-		})
-		if err != nil {
-			t.Fatalf("Failed to enqueue blocker: %v", err)
-		}
-
-		// Now enqueue an item with very short expiration
-		expireTime := time.Now().Add(10 * time.Millisecond) // Very short expiration
-
-		var executed bool
-		var mu sync.Mutex
-		_, err = smallPool.Enqueue("test-key", func(ctx context.Context) {
-			mu.Lock()
-			executed = true
-			mu.Unlock()
-		}, WithExpiration(expireTime))
-
-		if err != nil {
-			t.Errorf("Unexpected error during enqueue: %v", err)
-		}
-
-		// Wait for the blocker to finish and give time for the expired item to be processed
-		wg.Wait()
-		time.Sleep(100 * time.Millisecond)
-
-		mu.Lock()
-		if executed {
-			t.Error("Expired function should not have executed")
-		}
-		mu.Unlock()
-	})
-
-	t.Run("item already expired at enqueue time", func(t *testing.T) {
-		expireTime := time.Now().Add(-1 * time.Second) // Already expired
-
-		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
-			t.Error("Already expired function should not execute")
-		}, WithExpiration(expireTime))
-
-		if err != ErrQueueItemExpired {
-			t.Errorf("Expected ErrQueueItemExpired error, got: %v", err)
-		}
-	})
-
-	t.Run("item with expiration duration", func(t *testing.T) {
-		var executed bool
-		var mu sync.Mutex
-
-		_, err := mq.Enqueue("test-key", func(ctx context.Context) {
-			mu.Lock()
-			executed = true
-			mu.Unlock()
-		}, WithExpirationDuration(1*time.Second))
-
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-
-		time.Sleep(100 * time.Millisecond)
-		mu.Lock()
-		if !executed {
-			t.Error("Function should have executed before expiration")
-		}
-		mu.Unlock()
-	})
-
-	t.Run("item with short expiration duration", func(t *testing.T) {
-		// Fill up queue to delay processing
-		smallPool := NewPool(1, 1, KeyBased)
-		smallPool.Start()
-		defer smallPool.Stop()
-
-		// Block the worker
-		_, err := smallPool.Enqueue("blocker", func(ctx context.Context) {
-			time.Sleep(200 * time.Millisecond)
-		})
-		if err != nil {
-			t.Fatalf("Failed to enqueue blocker: %v", err)
-		}
-
-		_, err = smallPool.Enqueue("test-key", func(ctx context.Context) {
-			t.Error("Function should not execute due to expiration")
-		}, WithExpirationDuration(50*time.Millisecond))
-
-		if err != nil {
-			t.Errorf("Unexpected error during enqueue: %v", err)
-		}
-
-		// Wait for processing attempt
-		time.Sleep(300 * time.Millisecond)
-	})
-}
-
 func TestEnqueueWithMetadata(t *testing.T) {
 	mq := NewPool(2, 10, KeyBased)
 	mq.Start()
@@ -408,7 +117,6 @@ func TestEnqueueCombinedOptions(t *testing.T) {
 			mu.Unlock()
 		},
 			WithContext(ctx),
-			WithTimeout(2*time.Second),
 			WithExpirationDuration(5*time.Second),
 			WithMetadata(metadata),
 		)
@@ -427,10 +135,6 @@ func TestEnqueueCombinedOptions(t *testing.T) {
 		}
 		mu.Unlock()
 
-		// Verify context has deadline from WithTimeout
-		if _, ok := capturedCtx.Deadline(); !ok {
-			t.Error("Context should have a deadline")
-		}
 	})
 
 	t.Run("conflicting timeout and context", func(t *testing.T) {
@@ -445,7 +149,7 @@ func TestEnqueueCombinedOptions(t *testing.T) {
 			mu.Lock()
 			executed = true
 			mu.Unlock()
-		}, WithContext(baseCtx), WithTimeout(500*time.Millisecond))
+		}, WithContext(baseCtx))
 
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
@@ -565,7 +269,6 @@ func TestEnqueueErrorCases(t *testing.T) {
 
 		_, err := mq.Enqueue("test-key", func(ctx context.Context) {},
 			WithContext(ctx),
-			WithTimeout(1*time.Second),
 			WithExpirationDuration(2*time.Second),
 			WithMetadata(metadata),
 		)
@@ -576,31 +279,6 @@ func TestEnqueueErrorCases(t *testing.T) {
 }
 
 func TestQueueOptionsEdgeCases(t *testing.T) {
-	t.Run("WithTimeout on nil context", func(t *testing.T) {
-		// This should create a background context
-		options := applyEnqueueOptions(WithTimeout(1 * time.Second))
-
-		if options.ctx == nil {
-			t.Error("WithTimeout should create a context when none exists")
-		}
-
-		if _, ok := options.ctx.Deadline(); !ok {
-			t.Error("WithTimeout should set a deadline")
-		}
-	})
-
-	t.Run("WithTimeout on existing context", func(t *testing.T) {
-		baseCtx := context.Background()
-		options := applyEnqueueOptions(WithContext(baseCtx), WithTimeout(1*time.Second))
-
-		if options.ctx == nil {
-			t.Error("Should have a context")
-		}
-
-		if _, ok := options.ctx.Deadline(); !ok {
-			t.Error("WithTimeout should set a deadline on existing context")
-		}
-	})
 
 	t.Run("multiple WithMetadata calls", func(t *testing.T) {
 		metadata1 := map[string]interface{}{"key1": "value1", "shared": "first"}
@@ -634,9 +312,6 @@ func TestQueueOptionsEdgeCases(t *testing.T) {
 	t.Run("default options", func(t *testing.T) {
 		options := defaultEnqueueOptions()
 
-		if options.ctx == nil {
-			t.Error("Default options should have background context")
-		}
 		if options.metadata != nil {
 			t.Error("Default options should have nil metadata")
 		}

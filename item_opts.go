@@ -11,7 +11,7 @@ type EnqueueOption func(*EnqueueOptions)
 
 // EnqueueOptions contains all the options for enqueuing an item
 type EnqueueOptions struct {
-	ctx        context.Context
+	itemCtx    context.Context // Context for the enqueue operation
 	metadata   map[string]interface{}
 	expireTime time.Time
 }
@@ -19,21 +19,7 @@ type EnqueueOptions struct {
 // WithContext sets the context for the enqueue operation
 func WithContext(ctx context.Context) EnqueueOption {
 	return func(opts *EnqueueOptions) {
-		opts.ctx = ctx
-	}
-}
-
-// WithTimeout sets a timeout for the enqueue operation
-func WithTimeout(timeout time.Duration) EnqueueOption {
-	return func(opts *EnqueueOptions) {
-		if opts.ctx == nil {
-			opts.ctx = context.Background()
-		}
-		ctx, cancel := context.WithTimeout(opts.ctx, timeout)
-		opts.ctx = ctx
-		// Note: In real usage, you'd need to handle the cancel function
-		// For this example, we'll let it be handled by the context itself
-		_ = cancel
+		opts.itemCtx = ctx
 	}
 }
 
@@ -66,7 +52,7 @@ func WithMetadata(metadata map[string]interface{}) EnqueueOption {
 // defaultEnqueueOptions returns default options
 func defaultEnqueueOptions() *EnqueueOptions {
 	return &EnqueueOptions{
-		ctx:      context.Background(),
+		itemCtx:  context.Background(),
 		metadata: nil,
 	}
 }

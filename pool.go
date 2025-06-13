@@ -256,9 +256,9 @@ func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOpti
 	}
 
 	// Check if context is already cancelled
-	if options.ctx != nil {
+	if options.itemCtx != nil {
 		select {
-		case <-options.ctx.Done():
+		case <-options.itemCtx.Done():
 			return 0, ErrQueueItemCancelled
 		default:
 		}
@@ -279,25 +279,14 @@ func (p *Pool) Enqueue(key string, fn func(context.Context), opts ...EnqueueOpti
 	item := QueueItem{
 		key:         key,
 		fn:          fn,
-		ctx:         options.ctx,
+		ctx:         options.itemCtx,
 		metadata:    itemMetadata,
 		enqueueTime: time.Now(),
 		expireTime:  options.expireTime,
 	}
 
-	// Try to enqueue with context awareness - wait until slot is available
-	if options.ctx != nil {
-		select {
-		case p.workers[workerIndex].queue <- item:
-			return workerIndex, nil
-		case <-options.ctx.Done():
-			return 0, options.ctx.Err()
-		}
-	} else {
-		// Blocking send - wait until queue has space
-		p.workers[workerIndex].queue <- item
-		return workerIndex, nil
-	}
+	p.workers[workerIndex].queue <- item
+	return workerIndex, nil
 }
 
 // GetQueueLength returns the length of the queue for a specific worker by its ID.

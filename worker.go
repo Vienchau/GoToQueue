@@ -147,6 +147,13 @@ func (w *Worker) safeExecute(item *QueueItem) (recovered bool, panicValue interf
 
 	// Execute the function
 	w.logger.Debugf("Worker %d: Executing task with key: %s", w.id, item.key)
+	// apply metadata to context if available
+	if item.ctx != nil && item.metadata != nil {
+		for k, v := range item.metadata {
+			item.ctx = context.WithValue(item.ctx, k, v)
+		}
+	}
+
 	item.fn(item.ctx)
 	return false, nil
 }

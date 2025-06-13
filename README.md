@@ -224,7 +224,7 @@ err := pool.Enqueue("task:456", func(ctx context.Context) {
 err = pool.Enqueue("task:789", func(ctx context.Context) {
     time.Sleep(1 * time.Second)
     fmt.Println("Quick task done")
-}, gotoqueue.WithTimeout(30*time.Second))
+})
 ```
 
 ### Expiration

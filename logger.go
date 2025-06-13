@@ -16,6 +16,13 @@ const (
 	LogLevelSilent // No logging
 )
 
+const (
+	LOG_DEBUG  = "DEBUG"
+	LOG_INFO   = "INFO"
+	LOG_ERROR  = "ERROR"
+	LOG_SILENT = "SILENT"
+)
+
 // String representation of log levels
 func (l LogLevel) String() string {
 	switch l {
