@@ -6,6 +6,8 @@
 
 > Just a KeyBased/RoundRobin Work Queue coding with Copilot :)
 
+![alt text](vibe_coding.png)
+
 ## Features
 
 - **Multiple distribution strategies**:
@@ -300,7 +302,6 @@ func GetMetadata(ctx context.Context, key string) (interface{}, bool) {
 | `WithMetadata(map)` | Attach custom metadata (injected into context with type-safe keys) | `WithMetadata(map[string]interface{}{"key": "value"})` |
 
 > **Note**: 
-> - `WithTimeout` has been removed. Use `context.WithTimeout()` or `context.WithDeadline()` for timeout functionality.
 > - Metadata is automatically injected into context using type-safe keys to prevent collisions. Use `GetMetadata()` for extraction.
 
 ## Pool Management
